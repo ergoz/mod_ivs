@@ -23,14 +23,11 @@ chatGPT.logHttpErrors  = true;
 ivs.ttsEngine = 'google';
 ivs.language = 'en';
 
-// --------------------------------------------------------------------------------
-
 consoleLog('notice', "Context language..........: " + ivs.language);
 consoleLog('notice', "TTS engine................: " + ivs.ttsEngine);
 consoleLog('notice', "chatGPT.chatModel.........: " + chatGPT.chatModel);
 consoleLog('notice', "chatGPT.whisperModel......: " + chatGPT.whisperModel);
 
-// ---------------------------------------------------------------------------------
 var fl_play_hello = false;
 
 while(!script.isInterrupted()) {
