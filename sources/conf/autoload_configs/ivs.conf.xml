@@ -1,0 +1,18 @@
+<configuration name="ivs.conf" description="">
+    <settings>
+	<param name="vad-debug" value="true" />
+	<param name="vad-voice-ms" value="200" />
+	<param name="vad-silence-ms" value="350" />
+	<param name="vad-threshold" value="200" />
+
+	<param name="cng-level" value="500" />
+	<param name="chunk-len-sec" value="15" />
+	
+	<param name="default-tts-engine" value="google" />
+	<param name="default-asr-engine" value="google" />
+	<param name="default-language" value="en" />
+
+    </settings>
+
+</configuration>
+

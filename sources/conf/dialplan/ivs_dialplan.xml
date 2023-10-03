@@ -1,0 +1,8 @@
+
+<extension name="ivs-demo">
+  <condition field="destination_number" expression="^(3111)$">
+    <action application="answer"/>
+    <action application="ivs" data="chatgpt.js"/>
+    <action application="hangup"/>
+  </condition>
+</extension>
