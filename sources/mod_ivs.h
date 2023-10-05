@@ -28,12 +28,15 @@
 #define BIT_CHECK(a,b) (!!((a) & (1UL<<(b))))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-#define IVS_VERSION                 "1.0 (a3)"
+#define IVS_VERSION                 "1.0 (a4)"
 #define AUDIO_BUFFER_SIZE           (8*1024) // SWITCH_RECOMMENDED_BUFFER_SIZE
 #define AUDIO_QUEUE_SIZE            64
 #define EVENTS_QUEUE_SIZE           128
 #define VAD_STORE_FRAMES            64
 #define VAD_RECOVERY_FRAMES         15
+
+#define IVS_CHUNK_FORMAT_BUFFER     0x0 // L16
+#define IVS_CHUNK_FORMAT_FILE       0x1 // mp3
 
 #define JID_NONE                    0x0
 
@@ -91,6 +94,7 @@ typedef struct {
     const char              *asr_engine;
     switch_vad_state_t      vad_state;
     time_t                  start_ts;
+    uint32_t                chunk_format;
     uint32_t                job_id_cnt;
     uint32_t                wlocki;
     uint32_t                samplerate;

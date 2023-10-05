@@ -12,6 +12,7 @@
 #define PROP_TTS_ENGINE             2
 #define PROP_ASR_ENGINE             3
 #define PROP_VAD_STATE              4
+#define PROP_CHUNK_FORMAT           5
 
 #define IVS_SESSION_SANITY_CHECK() if (!js_ivs || !js_ivs->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -46,6 +47,15 @@ static JSValue js_ivs_property_get(JSContext *ctx, JSValueConst this_val, int ma
             ret_val = JS_NewString(ctx, ivs_session->asr_engine);
             return ret_val;
         }
+        case PROP_CHUNK_FORMAT: {
+            if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_FILE) {
+                return JS_NewString(ctx, "file");
+            }
+            if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_BUFFER) {
+                return JS_NewString(ctx, "buffer");
+            }
+            return JS_UNDEFINED;
+        }
         case PROP_VAD_STATE: {
             switch_vad_state_t vad_state = 0;
             vad_state = ivs_session->vad_state;
@@ -72,7 +82,7 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     ivs_session_t *ivs_session = js_ivs->session;
     const char *str = NULL;
-    int copy = 1, success = 1;
+    int copy = 1, success = 0;
 
     if(!js_ivs || !ivs_session) {
         return JS_UNDEFINED;
@@ -111,6 +121,20 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
             }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
+        }
+        case PROP_CHUNK_FORMAT: {
+            str = JS_ToCString(ctx, val);
+            if(!zstr(str)) {
+                if(strcasecmp(str, "file") == 0) {
+                    ivs_session->chunk_format = IVS_CHUNK_FORMAT_FILE;
+                    success = 1;
+                } else if(strcasecmp(str, "buffer") == 0) {
+                    ivs_session->chunk_format = IVS_CHUNK_FORMAT_BUFFER;
+                    success = 1;
+                }
+            }
+            JS_FreeCString(ctx, str);
+            return (success ? JS_TRUE : JS_FALSE);
         }
     }
     return JS_FALSE;
@@ -206,6 +230,7 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     ivs_session_t *ivs_session = js_ivs->session;
     JSValue ret_val = JS_FALSE;
+    JSValue edata_obj = JS_FALSE;
     uint8_t fl_found = false;
     void *pop = NULL;
 
@@ -216,9 +241,9 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
         if(event) {
             fl_found = true;
             ret_val = JS_NewObject(ctx);
+
             JS_SetPropertyStr(ctx, ret_val, "class",   JS_NewString(ctx, "IvsEvent"));
             JS_SetPropertyStr(ctx, ret_val, "jid",     JS_NewInt32(ctx, event->jid));
-
             switch(event->type) {
                 case IVS_EVENT_NOP: {
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "nop"));
@@ -233,37 +258,62 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                     break;
                 }
                 case IVS_EVENT_PLAYBACK_STARTED: {
+                    edata_obj = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "playback-started"));
-                    JS_SetPropertyStr(ctx, ret_val, "file", JS_NewStringLen(ctx, event->payload, event->payload_len));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+                    JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, event->payload, event->payload_len));
                     break;
                 }
                 case IVS_EVENT_PLAYBACK_FINISHED: {
+                    edata_obj = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "playback-finished"));
-                    JS_SetPropertyStr(ctx, ret_val, "file", JS_NewStringLen(ctx, event->payload, event->payload_len));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+                    JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, event->payload, event->payload_len));
                     break;
                 }
                 case IVS_EVENT_CHUNK_READY: {
                     ivs_event_payload_mchunk_t *payload = (ivs_event_payload_mchunk_t *)event->payload;
+                    edata_obj = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "chunk-ready"));
-                    JS_SetPropertyStr(ctx, ret_val, "time", (payload ? JS_NewInt32(ctx, payload->time) : JS_UNDEFINED));
-                    // todo: fields by type...
-                    JS_SetPropertyStr(ctx, ret_val, "file", (payload ? JS_NewStringLen(ctx, payload->data, payload->data_len) : JS_UNDEFINED));
-                    //
-                    JS_SetPropertyStr(ctx, ret_val, "length", (payload ? JS_NewInt32(ctx, payload->length) : JS_UNDEFINED));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+
+                    if(payload) {
+                        JS_SetPropertyStr(ctx, edata_obj, "time", JS_NewInt32(ctx, payload->time));
+                        JS_SetPropertyStr(ctx, edata_obj, "length", JS_NewInt32(ctx, payload->length));
+                        JS_SetPropertyStr(ctx, edata_obj, "samplerate", JS_NewInt32(ctx, payload->samplerate));
+                        JS_SetPropertyStr(ctx, edata_obj, "channels", JS_NewInt32(ctx, payload->channels));
+                        if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_FILE) {
+                            JS_SetPropertyStr(ctx, edata_obj, "format", JS_NewString(ctx, "file"));
+                            JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, payload->data, payload->data_len));
+                        } else if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_BUFFER) {
+                            JS_SetPropertyStr(ctx, edata_obj, "format", JS_NewString(ctx, "buffer"));
+                            JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, payload->data_len));
+                        }
+                    }
                     break;
                 }
                 case IVS_EVENT_TRANSCRIPTION_DONE: {
                     ivs_event_payload_transcription_t *payload = (ivs_event_payload_transcription_t *)event->payload;
+                    edata_obj = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "transcription-done"));
-                    JS_SetPropertyStr(ctx, ret_val, "text", (payload ? JS_NewString(ctx, payload->text) : JS_UNDEFINED));
-                    JS_SetPropertyStr(ctx, ret_val, "confidence", (payload ? JS_NewFloat64(ctx, payload->confidence) : JS_UNDEFINED));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+
+                    if(payload) {
+                        JS_SetPropertyStr(ctx, edata_obj, "text", JS_NewString(ctx, payload->text));
+                        JS_SetPropertyStr(ctx, edata_obj, "confidence", JS_NewFloat64(ctx, payload->confidence));
+                    }
                     break;
                 }
                 case IVS_EVENT_NLP_DONE: {
                     ivs_event_payload_nlp_t *payload = (ivs_event_payload_nlp_t *)event->payload;
+                    edata_obj = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "nlp-done"));
-                    JS_SetPropertyStr(ctx, ret_val, "role", (payload ? JS_NewString(ctx, payload->role) : JS_UNDEFINED));
-                    JS_SetPropertyStr(ctx, ret_val, "text", (payload ? JS_NewString(ctx, payload->text) : JS_UNDEFINED));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+
+                    if(payload) {
+                        JS_SetPropertyStr(ctx, edata_obj, "role", JS_NewString(ctx, payload->role));
+                        JS_SetPropertyStr(ctx, edata_obj, "text", JS_NewString(ctx, payload->text));
+                    }
                     break;
                 }
 
@@ -290,6 +340,7 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("ttsEngine", js_ivs_property_get, js_ivs_property_set, PROP_TTS_ENGINE),
     JS_CGETSET_MAGIC_DEF("asrEngine", js_ivs_property_get, js_ivs_property_set, PROP_ASR_ENGINE),
     JS_CGETSET_MAGIC_DEF("vadState", js_ivs_property_get, js_ivs_property_set, PROP_VAD_STATE),
+    JS_CGETSET_MAGIC_DEF("chunkFormat", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_FORMAT),
     //
     JS_CFUNC_DEF("say", 1, js_ivs_say),
     JS_CFUNC_DEF("playback", 1, js_ivs_playback),

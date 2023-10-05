@@ -37,14 +37,16 @@ switch_status_t ivs_event_push_simple(switch_queue_t *queue, uint32_t type, char
 switch_status_t ivs_event_push_dh(switch_queue_t *queue, uint32_t jid, uint32_t type, void *payload, uint32_t payload_len, mem_destroy_handler_t *payload_dh);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/* chunk ready */
+/* chunk ready , L16 codec */
 typedef struct {
+    uint32_t        samplerate;
+    uint32_t        channels;
     uint32_t        time;       // chunk sec
     uint32_t        length;     // chunk bytes
     uint32_t        data_len;
     uint8_t         *data;      // filename or raw data
 } ivs_event_payload_mchunk_t;
-switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len);
+switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* nlp result */

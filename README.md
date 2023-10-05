@@ -20,14 +20,17 @@ chatGPT.connectTimeout = 3;  // sec
 chatGPT.requestTimeout = 15; // sec
 chatGPT.logHttpErrors  = true;
 
-ivs.ttsEngine = 'google';
 ivs.language = 'en';
+ivs.ttsEngine = 'google'; // require mod_google_tts
+ivs.chunkFormat = 'file'; // needed for openai whisper
 
+// --------------------------------------------------------------------------------
 consoleLog('notice', "Context language..........: " + ivs.language);
 consoleLog('notice', "TTS engine................: " + ivs.ttsEngine);
 consoleLog('notice', "chatGPT.chatModel.........: " + chatGPT.chatModel);
 consoleLog('notice', "chatGPT.whisperModel......: " + chatGPT.whisperModel);
 
+// ---------------------------------------------------------------------------------
 var fl_play_hello = false;
 
 while(!script.isInterrupted()) {
@@ -41,21 +44,22 @@ while(!script.isInterrupted()) {
 
     var event = ivs.getEvent();
     if(event) {
-	// consoleLog('notice', "IVS-EVENT: " + JSON.stringify(event));
+        consoleLog('notice', "IVS-EVENT: " + JSON.stringify(event));
 
         if(event.type == "chunk-ready") {
-    	    chatGPT.aksWhisper(event.file, true, true);
+            //ivs.playback(event.data.file, true, true);        
+            chatGPT.aksWhisper(event.data.file, true, true);
         }
 
         if(event.type == "transcription-done") {
-            if(event.text && event.text.length >= 2) {
-        	chatGPT.askChatGPT(event.text, true);
+            if(event.data.text && event.data.text.length >= 2) {
+                chatGPT.askChatGPT(event.data.text, true);
             }
         }
 
         if(event.type == "nlp-done") {
-            if(event.text && event.text.length >= 2) {
-                ivs.say(event.text, true);
+            if(event.data.text && event.data.text.length >= 2) {
+                ivs.say(event.data.text, true);
             }
         }
     }

@@ -83,12 +83,15 @@ static void ivs_event_payload_free_mchunk(ivs_event_payload_mchunk_t *chunk) {
         switch_safe_free(chunk->data);
     }
 }
-switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len) {
+
+switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len) {
     ivs_event_payload_mchunk_t *mchunk = NULL;
 
     switch_zmalloc(mchunk, sizeof(ivs_event_payload_mchunk_t));
     mchunk->time = time;
     mchunk->length = length;
+    mchunk->channels = channels;
+    mchunk->samplerate = samplerate;
     mchunk->data_len = data_len;
 
     if(data_len) {

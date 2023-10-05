@@ -188,6 +188,7 @@ SWITCH_STANDARD_APP(ivs_dp_app) {
     ivs_session->chunk_buffer_size = ((globals.cfg_chunk_len_sec * read_impl.actual_samples_per_second) * sizeof(int16_t));
     ivs_session->vad_buffer_size = (ivs_session->decoded_bytes_per_packet * VAD_STORE_FRAMES);
     //
+    ivs_session->chunk_format = IVS_CHUNK_FORMAT_BUFFER;
     ivs_session->language = globals.default_language;
     ivs_session->tts_engine = globals.default_tts_engine;
     ivs_session->asr_engine = globals.default_asr_engine;
@@ -494,18 +495,20 @@ static void *SWITCH_THREAD_FUNC audio_processing_thread(switch_thread_t *thread,
             uint32_t buf_len = switch_buffer_peek_zerocopy(chunk_buffer, &ptr);
             uint32_t buf_time = (buf_len / ivs_session->samplerate);
 
-            // temporary for test
-            char *mp3f = audio_file_write((switch_byte_t *)ptr, buf_len, ivs_session->samplerate, ivs_session->channels);
-            if(mp3f == NULL) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't write file!");
-                switch_buffer_zero(chunk_buffer);
-                fl_chunk_ready = false;
-                goto timer_next;
+            if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_FILE) {
+                char *mp3f = audio_file_write((switch_byte_t *)ptr, buf_len, ivs_session->samplerate, ivs_session->channels);
+                if(mp3f == NULL) {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't write file!");
+                    switch_buffer_zero(chunk_buffer);
+                    fl_chunk_ready = false;
+                    goto timer_next;
+                }
+                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, mp3f, strlen(mp3f));
+                switch_safe_free(mp3f);
+            } else if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_BUFFER) {
+                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, (switch_byte_t *)ptr, buf_len);
             }
 
-            ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), buf_time, buf_len, mp3f, strlen(mp3f));
-
-            switch_safe_free(mp3f);
             switch_buffer_zero(chunk_buffer);
             fl_chunk_ready = false;
         }
