@@ -12,7 +12,8 @@
 #define PROP_TTS_ENGINE             2
 #define PROP_ASR_ENGINE             3
 #define PROP_VAD_STATE              4
-#define PROP_CHUNK_FORMAT           5
+#define PROP_CHUNK_TYPE             5
+#define PROP_CHUNK_FILE_TYPE         6
 
 #define IVS_SESSION_SANITY_CHECK() if (!js_ivs || !js_ivs->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -47,15 +48,19 @@ static JSValue js_ivs_property_get(JSContext *ctx, JSValueConst this_val, int ma
             ret_val = JS_NewString(ctx, ivs_session->asr_engine);
             return ret_val;
         }
-        case PROP_CHUNK_FORMAT: {
-            if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_FILE) {
+        case PROP_CHUNK_TYPE: {
+            if(ivs_session->chunk_type == IVS_CHUNK_TYPE_FILE) {
                 return JS_NewString(ctx, "file");
             }
-            if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_BUFFER) {
+            if(ivs_session->chunk_type == IVS_CHUNK_TYPE_BUFFER) {
                 return JS_NewString(ctx, "buffer");
             }
             return JS_UNDEFINED;
         }
+        case PROP_CHUNK_FILE_TYPE: {
+            return (ivs_session->chunk_file_ext ? JS_NewString(ctx, ivs_session->chunk_file_ext) : JS_UNDEFINED);
+        }
+
         case PROP_VAD_STATE: {
             switch_vad_state_t vad_state = 0;
             vad_state = ivs_session->vad_state;
@@ -95,7 +100,11 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
                 ivs_session->language = NULL;
             } else {
                 if(!zstr(ivs_session->language)) { copy = strcmp(ivs_session->language, str); }
-                if(copy) { ivs_session->language = switch_core_strdup(ivs_session->script->pool, str); }
+                if(copy) {
+                    switch_mutex_lock(ivs_session->mutex);
+                    ivs_session->language = switch_core_strdup(ivs_session->script->pool, str);
+                    switch_mutex_unlock(ivs_session->mutex);
+                }
             }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
@@ -106,7 +115,11 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
                 ivs_session->tts_engine = NULL;
             } else {
                 if(!zstr(ivs_session->tts_engine)) { copy = strcmp(ivs_session->tts_engine, str); }
-                if(copy) { ivs_session->tts_engine = switch_core_strdup(ivs_session->script->pool, str); }
+                if(copy) {
+                    switch_mutex_lock(ivs_session->mutex);
+                    ivs_session->tts_engine = switch_core_strdup(ivs_session->script->pool, str);
+                    switch_mutex_unlock(ivs_session->mutex);
+                }
             }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
@@ -117,20 +130,44 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
                 ivs_session->asr_engine = NULL;
             } else {
                 if(!zstr(ivs_session->asr_engine)) { copy = strcmp(ivs_session->asr_engine, str); }
-                if(copy) { ivs_session->asr_engine = switch_core_strdup(ivs_session->script->pool, str); }
+                if(copy) {
+                    switch_mutex_lock(ivs_session->mutex);
+                    ivs_session->asr_engine = switch_core_strdup(ivs_session->script->pool, str);
+                    switch_mutex_unlock(ivs_session->mutex);
+                }
             }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
-        case PROP_CHUNK_FORMAT: {
+        case PROP_CHUNK_TYPE: {
             str = JS_ToCString(ctx, val);
             if(!zstr(str)) {
                 if(strcasecmp(str, "file") == 0) {
-                    ivs_session->chunk_format = IVS_CHUNK_FORMAT_FILE;
+                    switch_mutex_lock(ivs_session->mutex);
+                    ivs_session->chunk_type = IVS_CHUNK_TYPE_FILE;
+                    switch_mutex_unlock(ivs_session->mutex);
                     success = 1;
                 } else if(strcasecmp(str, "buffer") == 0) {
-                    ivs_session->chunk_format = IVS_CHUNK_FORMAT_BUFFER;
+                    switch_mutex_lock(ivs_session->mutex);
+                    ivs_session->chunk_type = IVS_CHUNK_TYPE_BUFFER;
+                    switch_mutex_unlock(ivs_session->mutex);
                     success = 1;
+                }
+            }
+            JS_FreeCString(ctx, str);
+            return (success ? JS_TRUE : JS_FALSE);
+        }
+        case PROP_CHUNK_FILE_TYPE: {
+            str = JS_ToCString(ctx, val);
+            if(zstr(str)) {
+                ivs_session->chunk_file_ext = NULL;
+            } else {
+                if(!zstr(ivs_session->chunk_file_ext)) { copy = strcmp(ivs_session->chunk_file_ext, str); }
+                if(copy) {
+                    switch_mutex_lock(ivs_session->mutex);
+                    ivs_session->chunk_file_ext = switch_core_strdup(ivs_session->script->pool, str);
+                    ivs_session->fl_chunk_file_ext_changed = true;
+                    switch_mutex_unlock(ivs_session->mutex);
                 }
             }
             JS_FreeCString(ctx, str);
@@ -282,10 +319,10 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                         JS_SetPropertyStr(ctx, edata_obj, "length", JS_NewInt32(ctx, payload->length));
                         JS_SetPropertyStr(ctx, edata_obj, "samplerate", JS_NewInt32(ctx, payload->samplerate));
                         JS_SetPropertyStr(ctx, edata_obj, "channels", JS_NewInt32(ctx, payload->channels));
-                        if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_FILE) {
+                        if(ivs_session->chunk_type == IVS_CHUNK_TYPE_FILE) {
                             JS_SetPropertyStr(ctx, edata_obj, "format", JS_NewString(ctx, "file"));
                             JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, payload->data, payload->data_len));
-                        } else if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_BUFFER) {
+                        } else if(ivs_session->chunk_type == IVS_CHUNK_TYPE_BUFFER) {
                             JS_SetPropertyStr(ctx, edata_obj, "format", JS_NewString(ctx, "buffer"));
                             JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, payload->data_len));
                         }
@@ -340,7 +377,8 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("ttsEngine", js_ivs_property_get, js_ivs_property_set, PROP_TTS_ENGINE),
     JS_CGETSET_MAGIC_DEF("asrEngine", js_ivs_property_get, js_ivs_property_set, PROP_ASR_ENGINE),
     JS_CGETSET_MAGIC_DEF("vadState", js_ivs_property_get, js_ivs_property_set, PROP_VAD_STATE),
-    JS_CGETSET_MAGIC_DEF("chunkFormat", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_FORMAT),
+    JS_CGETSET_MAGIC_DEF("chunkType", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_TYPE),
+    JS_CGETSET_MAGIC_DEF("chunkFileType", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_FILE_TYPE),
     //
     JS_CFUNC_DEF("say", 1, js_ivs_say),
     JS_CFUNC_DEF("playback", 1, js_ivs_playback),

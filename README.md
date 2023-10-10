@@ -21,12 +21,15 @@ chatGPT.requestTimeout = 15; // sec
 chatGPT.logHttpErrors  = true;
 
 ivs.language = 'en';
-ivs.ttsEngine = 'google'; // require mod_google_tts
-ivs.chunkFormat = 'file'; // needed for openai whisper
+ivs.ttsEngine = 'google';
+ivs.chunkType = 'file';
+ivs.chunkFileType = 'mp3';
 
 // --------------------------------------------------------------------------------
 consoleLog('notice', "Context language..........: " + ivs.language);
 consoleLog('notice', "TTS engine................: " + ivs.ttsEngine);
+consoleLog('notice', "Chunk type................: " + ivs.chunkType);
+consoleLog('notice', "ChunkFileType.............: " + ivs.chunkFileType);
 consoleLog('notice', "chatGPT.chatModel.........: " + chatGPT.chatModel);
 consoleLog('notice', "chatGPT.whisperModel......: " + chatGPT.whisperModel);
 

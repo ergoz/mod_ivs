@@ -35,8 +35,8 @@
 #define VAD_STORE_FRAMES            64
 #define VAD_RECOVERY_FRAMES         15
 
-#define IVS_CHUNK_FORMAT_BUFFER     0x0 // L16
-#define IVS_CHUNK_FORMAT_FILE       0x1 // mp3
+#define IVS_CHUNK_TYPE_BUFFER       0x0 // L16
+#define IVS_CHUNK_TYPE_FILE         0x1 // file
 
 #define JID_NONE                    0x0
 
@@ -92,9 +92,10 @@ typedef struct {
     const char              *language;
     const char              *tts_engine;
     const char              *asr_engine;
+    const char              *chunk_file_ext; // mp3, wav
     switch_vad_state_t      vad_state;
     time_t                  start_ts;
-    uint32_t                chunk_format;
+    uint32_t                chunk_type;
     uint32_t                job_id_cnt;
     uint32_t                wlocki;
     uint32_t                samplerate;
@@ -108,6 +109,7 @@ typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_do_destroy;
     uint8_t                 fl_destroyed;
+    uint8_t                 fl_chunk_file_ext_changed;
 } ivs_session_t;
 
 typedef struct {
@@ -133,7 +135,7 @@ switch_status_t xdata_buffer_alloc(xdata_buffer_t **out, switch_byte_t *data, ui
 void xdata_buffer_free(xdata_buffer_t *buf);
 void xdata_buffer_queue_clean(switch_queue_t *queue);
 
-char *audio_file_write(switch_byte_t *buf, uint32_t buf_len, uint32_t samplerate, uint32_t channels);
+char *audio_file_write(switch_byte_t *buf, uint32_t buf_len, uint32_t samplerate, uint32_t channels, const char *file_ext);
 
 
 #endif

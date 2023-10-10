@@ -188,7 +188,8 @@ SWITCH_STANDARD_APP(ivs_dp_app) {
     ivs_session->chunk_buffer_size = ((globals.cfg_chunk_len_sec * read_impl.actual_samples_per_second) * sizeof(int16_t));
     ivs_session->vad_buffer_size = (ivs_session->decoded_bytes_per_packet * VAD_STORE_FRAMES);
     //
-    ivs_session->chunk_format = IVS_CHUNK_FORMAT_BUFFER;
+    ivs_session->chunk_file_ext = "mp3";
+    ivs_session->chunk_type = IVS_CHUNK_TYPE_BUFFER;
     ivs_session->language = globals.default_language;
     ivs_session->tts_engine = globals.default_tts_engine;
     ivs_session->asr_engine = globals.default_asr_engine;
@@ -457,6 +458,8 @@ static void *SWITCH_THREAD_FUNC audio_processing_thread(switch_thread_t *thread,
     switch_core_session_t *session = ivs_session->session;
     switch_memory_pool_t *pool = NULL;
     switch_buffer_t *chunk_buffer = NULL;
+    char *file_ext_local = NULL;
+    uint32_t chunk_type_local = 0;
     uint8_t fl_chunk_ready = false;
     void *pop = NULL;
 
@@ -495,17 +498,28 @@ static void *SWITCH_THREAD_FUNC audio_processing_thread(switch_thread_t *thread,
             uint32_t buf_len = switch_buffer_peek_zerocopy(chunk_buffer, &ptr);
             uint32_t buf_time = (buf_len / ivs_session->samplerate);
 
-            if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_FILE) {
-                char *mp3f = audio_file_write((switch_byte_t *)ptr, buf_len, ivs_session->samplerate, ivs_session->channels);
-                if(mp3f == NULL) {
-                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't write file!");
+            switch_mutex_lock(ivs_session->mutex);
+            chunk_type_local = ivs_session->chunk_type;
+            if(file_ext_local == NULL) {
+                if(ivs_session->chunk_file_ext) { file_ext_local = switch_core_strdup(pool, ivs_session->chunk_file_ext); }
+            } else {
+                if(ivs_session->chunk_file_ext && ivs_session->fl_chunk_file_ext_changed) {
+                    file_ext_local = switch_core_strdup(pool, ivs_session->chunk_file_ext);
+                    ivs_session->fl_chunk_file_ext_changed = false;
+                }
+            }
+            switch_mutex_unlock(ivs_session->mutex);
+
+            if(chunk_type_local == IVS_CHUNK_TYPE_FILE) {
+                char *out_fname = audio_file_write((switch_byte_t *)ptr, buf_len, ivs_session->samplerate, ivs_session->channels, file_ext_local);
+                if(out_fname == NULL) {
                     switch_buffer_zero(chunk_buffer);
                     fl_chunk_ready = false;
                     goto timer_next;
                 }
-                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, mp3f, strlen(mp3f));
-                switch_safe_free(mp3f);
-            } else if(ivs_session->chunk_format == IVS_CHUNK_FORMAT_BUFFER) {
+                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, out_fname, strlen(out_fname));
+                switch_safe_free(out_fname);
+            } else if(chunk_type_local == IVS_CHUNK_TYPE_BUFFER) {
                 ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, (switch_byte_t *)ptr, buf_len);
             }
 
