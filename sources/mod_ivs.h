@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #ifndef MOD_IVS_H
@@ -28,7 +27,7 @@
 #define BIT_CHECK(a,b) (!!((a) & (1UL<<(b))))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-#define IVS_VERSION                 "1.0 (a4)"
+#define IVS_VERSION                 "1.0 (a5)"
 #define AUDIO_BUFFER_SIZE           (8*1024) // SWITCH_RECOMMENDED_BUFFER_SIZE
 #define AUDIO_QUEUE_SIZE            64
 #define EVENTS_QUEUE_SIZE           128
@@ -136,6 +135,8 @@ void xdata_buffer_free(xdata_buffer_t *buf);
 void xdata_buffer_queue_clean(switch_queue_t *queue);
 
 char *audio_file_write(switch_byte_t *buf, uint32_t buf_len, uint32_t samplerate, uint32_t channels, const char *file_ext);
+
+char *safe_pool_strdup(switch_memory_pool_t *pool, const char *str);
 
 
 #endif

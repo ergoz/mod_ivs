@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #include <mod_ivs.h>
@@ -179,3 +178,8 @@ out:
     return file_name;
 }
 
+char *safe_pool_strdup(switch_memory_pool_t *pool, const char *str) {
+    switch_assert(pool);
+    if(zstr(str)) { return NULL; }
+    return switch_core_strdup(pool, str);
+}

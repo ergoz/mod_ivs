@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #ifndef IVS_CURL_H
@@ -34,6 +33,8 @@ typedef struct {
     uint32_t                send_buffer_len;
     uint32_t                request_timeout;
     uint32_t                connect_timeout;
+    uint32_t                ssl_verfypeer;
+    uint32_t                ssl_verfyhost;
     long                    curl_auth_type; // CURLAUTH_ANY, CURLAUTH_BASIC, CURLAUTH_BEARER, ...
     uint32_t                http_error;
     uint8_t                 fl_ext_pool;
@@ -45,3 +46,4 @@ switch_status_t curl_perform(curl_conf_t *curl_config);
 switch_status_t curl_field_add(curl_conf_t *curl_config, int type, char *name, char *value);
 
 #endif
+

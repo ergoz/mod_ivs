@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #include <ivs_curl.h>
@@ -82,8 +81,8 @@ switch_status_t curl_perform(curl_conf_t *curl_config) {
         }
     }
     if(strncasecmp(curl_config->url, "https", 5) == 0) {
-        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0);
-        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0);
+        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, curl_config->ssl_verfypeer);
+        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, curl_config->ssl_verfyhost);
     }
     if(curl_config->proxy) {
         if(curl_config->proxy_credentials != NULL) {
@@ -197,6 +196,8 @@ switch_status_t curl_config_alloc(curl_conf_t **curl_config, switch_memory_pool_
     lconf->send_buffer = NULL;
     lconf->send_buffer_len = 0;
     lconf->curl_auth_type = CURLAUTH_ANY;
+    lconf->ssl_verfypeer = 0;
+    lconf->ssl_verfyhost = 0;
 
     *curl_config = lconf;
 out:

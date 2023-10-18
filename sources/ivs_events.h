@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #ifndef IVS_EVENTS_H
@@ -8,15 +7,16 @@
 
 #include <mod_ivs.h>
 
-#define IVS_EVENT_NOP                   0x00
-#define IVS_EVENT_SPEAKING_START        0x01
-#define IVS_EVENT_SPEAKING_STOP         0x02
-#define IVS_EVENT_CHUNK_READY           0x03
-#define IVS_EVENT_PLAYBACK_STARTED      0x04
-#define IVS_EVENT_PLAYBACK_FINISHED     0x05
-#define IVS_EVENT_TRANSCRIPTION_DONE    0x06
-#define IVS_EVENT_NLP_DONE              0x07
-#define IVS_EVENT_JOB_FAIL              0x08
+#define IVS_EVENT_NOP                       0x00
+#define IVS_EVENT_SPEAKING_START            0x01
+#define IVS_EVENT_SPEAKING_STOP             0x02
+#define IVS_EVENT_CHUNK_READY               0x03
+#define IVS_EVENT_PLAYBACK_STARTED          0x04
+#define IVS_EVENT_PLAYBACK_FINISHED         0x05
+#define IVS_EVENT_TRANSCRIPTION_DONE        0x06
+#define IVS_EVENT_NLP_DONE                  0x07
+#define IVS_EVENT_CURL_DONE                 0x08
+
 
 typedef void (mem_destroy_handler_t)(void *data);
 
@@ -69,4 +69,17 @@ void ivs_event_payload_transcription_free(ivs_event_payload_transcription_t *pay
 switch_status_t ivs_event_payload_transcription_alloc(ivs_event_payload_transcription_t **payload, double confidence, char *text);
 switch_status_t ivs_event_push_transcription(switch_queue_t *queue, uint32_t jid, double confidence, char *text);
 switch_status_t ivs_event_push_transcription2(switch_queue_t *queue, uint32_t jid, ivs_event_payload_transcription_t *payload);
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/* curl result */
+typedef struct {
+    char        *body;
+    uint32_t    body_len;
+    uint32_t    http_code;
+} ivs_event_payload_curl_t;
+void ivs_event_payload_curl_free(ivs_event_payload_curl_t *payload);
+switch_status_t ivs_event_payload_curl_alloc(ivs_event_payload_curl_t **payload, uint32_t http_code, char *body, uint32_t body_len);
+switch_status_t ivs_event_push_curl(switch_queue_t *queue, uint32_t jid, uint32_t http_code, char *body, uint32_t body_len);
+switch_status_t ivs_event_push_curl2(switch_queue_t *queue, uint32_t jid, ivs_event_payload_curl_t *payload);
+
 #endif

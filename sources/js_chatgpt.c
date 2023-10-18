@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #include "ivs_qjs.h"
@@ -161,7 +160,7 @@ static void *SWITCH_THREAD_FUNC nlp_request_async_thread(switch_thread_t *thread
     res = nlp_request_exec(chatgpt_conf);
     if(res) {
         if(ivs_event_push_nlp2(IVS_EVENTSQ(chatgpt_conf->ivs_session_ref), chatgpt_conf->jid, res) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Event fail: IVS_EVENT_NLP_DONE\n");
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to emit event\n");
 
             ivs_event_payload_nlp_free(res);
             switch_safe_free(res);
@@ -173,9 +172,7 @@ static void *SWITCH_THREAD_FUNC nlp_request_async_thread(switch_thread_t *thread
     }
 
     chatgpt_conf_free(chatgpt_conf);
-
     ivs_session_release(ivs_session);
-
     thread_finished();
     return NULL;
 }
@@ -187,6 +184,7 @@ static uint32_t nlp_request_exec_async(chatgpt_conf_t *chatgpt_conf) {
         chatgpt_conf->jid = jid;
         launch_thread(chatgpt_conf->pool, nlp_request_async_thread, chatgpt_conf);
     }
+
     return jid;
 }
 
@@ -249,7 +247,7 @@ static void *SWITCH_THREAD_FUNC whisper_request_async_thread(switch_thread_t *th
     res = whisper_request_exec(chatgpt_conf);
     if(res) {
         if(ivs_event_push_transcription2(IVS_EVENTSQ(chatgpt_conf->ivs_session_ref), chatgpt_conf->jid, res) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Event fail: IVS_EVENT_TRANSCRIPTION_DONE\n");
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to emit event\n");
 
             ivs_event_payload_transcription_free(res);
             switch_safe_free(res);
@@ -261,9 +259,7 @@ static void *SWITCH_THREAD_FUNC whisper_request_async_thread(switch_thread_t *th
     }
 
     chatgpt_conf_free(chatgpt_conf);
-
     ivs_session_release(ivs_session);
-
     thread_finished();
     return NULL;
 }
@@ -275,6 +271,7 @@ static uint32_t whisper_request_exec_async(chatgpt_conf_t *chatgpt_conf) {
         chatgpt_conf->jid = jid;
         launch_thread(chatgpt_conf->pool, whisper_request_async_thread, chatgpt_conf);
     }
+
     return jid;
 }
 
@@ -347,8 +344,8 @@ static JSValue js_chatgpt_property_set(JSContext *ctx, JSValueConst this_val, JS
 
     switch(magic) {
         case PROP_APIKEY: {
+            if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(zstr(str)) { return JS_FALSE; }
             if(strcmp(js_chatgpt->apikey, str)) {
                 js_chatgpt->apikey = switch_core_strdup(js_chatgpt->pool, str);
             }
@@ -356,8 +353,8 @@ static JSValue js_chatgpt_property_set(JSContext *ctx, JSValueConst this_val, JS
             return JS_TRUE;
         }
         case PROP_CHAT_MODEL: {
+            if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(zstr(str)) { return JS_FALSE; }
             if(strcmp(js_chatgpt->chat_model, str)) {
                 js_chatgpt->chat_model = switch_core_strdup(js_chatgpt->pool, str);
             }
@@ -365,8 +362,8 @@ static JSValue js_chatgpt_property_set(JSContext *ctx, JSValueConst this_val, JS
             return JS_TRUE;
         }
         case PROP_WHISPER_MODEL: {
+            if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(zstr(str)) { return JS_FALSE; }
             if(strcmp(js_chatgpt->whisper_model, str)) {
                 js_chatgpt->whisper_model = switch_core_strdup(js_chatgpt->pool, str);
             }
@@ -374,63 +371,47 @@ static JSValue js_chatgpt_property_set(JSContext *ctx, JSValueConst this_val, JS
             return JS_TRUE;
         }
         case PROP_USER_AGENT: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 js_chatgpt->user_agent = NULL;
             } else {
-                if(!zstr(js_chatgpt->user_agent)) {
-                    copy = strcmp(js_chatgpt->user_agent, str);
-                }
-                if(copy) {
-                    js_chatgpt->user_agent = switch_core_strdup(js_chatgpt->pool, str);
-                }
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->user_agent)) { copy = strcmp(js_chatgpt->user_agent, str); }
+                if(copy) { js_chatgpt->user_agent = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_ROLE: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 js_chatgpt->role = NULL;
             } else {
-                if(!zstr(js_chatgpt->role)) {
-                    copy = strcmp(js_chatgpt->role, str);
-                }
-                if(copy) {
-                    js_chatgpt->role = switch_core_strdup(js_chatgpt->pool, str);
-                }
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->role)) { copy = strcmp(js_chatgpt->role, str); }
+                if(copy) { js_chatgpt->role = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_PROXY: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 js_chatgpt->proxy = NULL;
             } else {
-                if(!zstr(js_chatgpt->proxy)) {
-                    copy = strcmp(js_chatgpt->proxy, str);
-                }
-                if(copy) {
-                    js_chatgpt->proxy = switch_core_strdup(js_chatgpt->pool, str);
-                }
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->proxy)) { copy = strcmp(js_chatgpt->proxy, str); }
+                if(copy) { js_chatgpt->proxy = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_PROXY_CREDENTIALS: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 js_chatgpt->proxy_credentials = NULL;
             } else {
-                if(!zstr(js_chatgpt->proxy_credentials)) {
-                    copy = strcmp(js_chatgpt->proxy_credentials, str);
-                }
-                if(copy) {
-                    js_chatgpt->proxy_credentials = switch_core_strdup(js_chatgpt->pool, str);
-                }
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->proxy_credentials)) { copy = strcmp(js_chatgpt->proxy_credentials, str); }
+                if(copy) { js_chatgpt->proxy_credentials = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
 
@@ -474,8 +455,11 @@ static JSValue js_chatgpt_do_chat_request(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Malformed reference: ivs_session");
     }
     if(argc > 0) {
+        if(QJS_IS_NULL(argv[0])) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid argument: text\n");
+            goto out;
+        }
         text_to_send = JS_ToCString(ctx, argv[0]);
-        if(zstr(text_to_send)) { goto out; }
     }
     if(argc > 1) {
         fl_async = JS_ToBool(ctx, argv[1]);
@@ -487,7 +471,6 @@ static JSValue js_chatgpt_do_chat_request(JSContext *ctx, JSValueConst this_val,
         cJSON_Delete(jstr);
     }
 
-    // gpt conf
     if((status = chatgpt_conf_alloc(&chatgpt_conf)) != SWITCH_STATUS_SUCCESS) {
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
@@ -496,12 +479,12 @@ static JSValue js_chatgpt_do_chat_request(JSContext *ctx, JSValueConst this_val,
     chatgpt_conf->curl_conf->url = CHATGPT_NLP_URL;
     chatgpt_conf->curl_conf->content_type = CHATGPT_NLP_TYPE;
     chatgpt_conf->curl_conf->curl_auth_type = CURLAUTH_BEARER;
-    chatgpt_conf->curl_conf->credentials = switch_core_strdup(chatgpt_conf->pool, js_chatgpt->apikey);
     chatgpt_conf->curl_conf->send_buffer = switch_core_sprintf(chatgpt_conf->pool, "{\"model\": \"%s\", \"messages\": [{\"role\": \"%s\", \"content\": %s}]}", js_chatgpt->chat_model, js_chatgpt->role, (json_text ? json_text : "null"));
     chatgpt_conf->curl_conf->send_buffer_len = strlen(chatgpt_conf->curl_conf->send_buffer);
     chatgpt_conf->curl_conf->request_timeout = js_chatgpt->request_timeout;
     chatgpt_conf->curl_conf->connect_timeout = js_chatgpt->connect_timeout;
-    chatgpt_conf->curl_conf->user_agent = js_chatgpt->user_agent;
+    chatgpt_conf->curl_conf->credentials = safe_pool_strdup(chatgpt_conf->pool, js_chatgpt->apikey);
+    chatgpt_conf->curl_conf->user_agent = safe_pool_strdup(chatgpt_conf->pool, js_chatgpt->user_agent);
 
     if(fl_async) {
         uint32_t jid = nlp_request_exec_async(chatgpt_conf);
@@ -528,14 +511,15 @@ out:
         }
     }
 
-    return (status == SWITCH_STATUS_SUCCESS ? ret_obj : JS_FALSE);
+    return ret_obj;
 }
 
-// aksWhisper(file, asyncFlag, delFileFlag);
+
+// aksWhisper(filename, deleteFileFlag, asyncFlag);
 static JSValue js_chatgpt_do_whisper_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_chatgpt_t *js_chatgpt = JS_GetOpaque2(ctx, this_val, js_chatgpt_get_classid(ctx));
     ivs_session_t *ivs_session = JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
-    switch_status_t status = SWITCH_STATUS_FALSE;
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
     chatgpt_conf_t *chatgpt_conf = NULL;
     const char *file_to_send = NULL;
     int fl_async = false, fl_delete = false;
@@ -547,14 +531,17 @@ static JSValue js_chatgpt_do_whisper_request(JSContext *ctx, JSValueConst this_v
         return JS_ThrowTypeError(ctx, "Malformed reference: ivs_session");
     }
     if(argc > 0) {
+        if(QJS_IS_NULL(argv[0])) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid argument: filename\n");
+            goto out;
+        }
         file_to_send = JS_ToCString(ctx, argv[0]);
-        if(zstr(file_to_send)) {  goto out;  }
     }
     if(argc > 1) {
-        fl_async = JS_ToBool(ctx, argv[1]);
+        fl_delete = JS_ToBool(ctx, argv[1]);
     }
     if(argc > 2) {
-        fl_delete = JS_ToBool(ctx, argv[2]);
+        fl_async = JS_ToBool(ctx, argv[2]);
     }
 
     if((status = switch_file_exists(file_to_send, NULL)) != SWITCH_STATUS_SUCCESS) {
@@ -565,6 +552,7 @@ static JSValue js_chatgpt_do_whisper_request(JSContext *ctx, JSValueConst this_v
     if((status = chatgpt_conf_alloc(&chatgpt_conf)) != SWITCH_STATUS_SUCCESS) {
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
+
     chatgpt_conf->ivs_session_ref = ivs_session;
     chatgpt_conf->file_to_send = switch_core_strdup(chatgpt_conf->pool, file_to_send);
     chatgpt_conf->fl_delete_file = fl_delete;
@@ -573,10 +561,10 @@ static JSValue js_chatgpt_do_whisper_request(JSContext *ctx, JSValueConst this_v
     chatgpt_conf->curl_conf->url = CHATGPT_WHISPER_URL;
     chatgpt_conf->curl_conf->content_type = CHATGPT_WHISPER_TYPE;
     chatgpt_conf->curl_conf->curl_auth_type = CURLAUTH_BEARER;
-    chatgpt_conf->curl_conf->credentials = switch_core_strdup(chatgpt_conf->pool, js_chatgpt->apikey);
     chatgpt_conf->curl_conf->request_timeout = js_chatgpt->request_timeout;
     chatgpt_conf->curl_conf->connect_timeout = js_chatgpt->connect_timeout;
-    chatgpt_conf->curl_conf->user_agent = js_chatgpt->user_agent;
+    chatgpt_conf->curl_conf->credentials = safe_pool_strdup(chatgpt_conf->pool, js_chatgpt->apikey);
+    chatgpt_conf->curl_conf->user_agent = safe_pool_strdup(chatgpt_conf->pool, js_chatgpt->user_agent);
 
     curl_field_add(chatgpt_conf->curl_conf, CURL_FIELD_TYPE_SIMPLE, "model", js_chatgpt->whisper_model);
     curl_field_add(chatgpt_conf->curl_conf, CURL_FIELD_TYPE_FILE, "file", (char *)file_to_send);
@@ -604,10 +592,8 @@ out:
             chatgpt_conf_free(chatgpt_conf);
         }
     }
-
-    return (status == SWITCH_STATUS_SUCCESS ? ret_obj : JS_FALSE);
+    return ret_obj;
 }
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_chatgpt_class = {
     CLASS_NAME,

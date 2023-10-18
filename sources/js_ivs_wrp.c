@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #include "js_ivs_wrp.h"
@@ -96,7 +95,7 @@ uint32_t js_ivs_async_say(ivs_session_t *ivs_session, const char *lang, const ch
     params->pool = pool_local;
     params->ivs_session = ivs_session;
     params->data = switch_core_strdup(pool_local, text);
-    params->lang = (lang == NULL ? NULL : switch_core_strdup(pool_local, lang));
+    params->lang = safe_pool_strdup(pool_local, lang);
     params->mode = 1;
 
     if(ivs_session_take(params->ivs_session)) {

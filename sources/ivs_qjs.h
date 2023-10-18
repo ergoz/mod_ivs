@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #ifndef IVS_QJS_H
@@ -8,22 +7,24 @@
 
 #include "mod_ivs.h"
 
+#define QJS_IS_NULL(jsV)  (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
+
 // Curl
 typedef struct {
-    uint32_t                timeout;
-    uint32_t                response_length;
-    uint8_t                 fl_ignore_rdata;
+    long                    auth_type;
+    uint32_t                connect_timeout;
+    uint32_t                request_timeout;
     uint8_t                 fl_ssl_verfypeer;
     uint8_t                 fl_ssl_verfyhost;
     char                    *url;
-    char                    *proxy;
     char                    *cacert;
-    char                    *cacert_proxy;
     char                    *method;
+    char                    *user_agent;
     char                    *credentials;
     char                    *content_type;
-    char                    *response_buffer;
-    char                    *credentials_proxy;
+    char                    *proxy_credentials;
+    char                    *proxy_cacert;
+    char                    *proxy;
     switch_memory_pool_t    *pool;
 } js_curl_t;
 JSClassID js_curl_get_classid(JSContext *ctx);

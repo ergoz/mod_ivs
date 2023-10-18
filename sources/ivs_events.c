@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #include <ivs_events.h>
@@ -104,7 +103,7 @@ switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t sampl
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// nlp-done
+// nlp-finished
 void ivs_event_payload_nlp_free(ivs_event_payload_nlp_t *payload) {
     if(payload) {
         switch_safe_free(payload->role);
@@ -137,7 +136,7 @@ switch_status_t ivs_event_push_nlp2(switch_queue_t *queue, uint32_t jid, ivs_eve
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// trabscription-done
+// transcription-finished
 void ivs_event_payload_transcription_free(ivs_event_payload_transcription_t *payload) {
     if(payload) {
         switch_safe_free(payload->text);
@@ -169,4 +168,46 @@ switch_status_t ivs_event_push_transcription(switch_queue_t *queue, uint32_t jid
 switch_status_t ivs_event_push_transcription2(switch_queue_t *queue, uint32_t jid, ivs_event_payload_transcription_t *payload) {
     return ivs_event_push_dh(queue, jid, IVS_EVENT_TRANSCRIPTION_DONE, payload, sizeof(ivs_event_payload_transcription_t), (mem_destroy_handler_t *)ivs_event_payload_transcription_free);
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// curl-finished
+void ivs_event_payload_curl_free(ivs_event_payload_curl_t *payload) {
+    if(payload) {
+        switch_safe_free(payload->body);
+    }
+}
+
+switch_status_t ivs_event_payload_curl_alloc(ivs_event_payload_curl_t **payload, uint32_t http_code, char *body, uint32_t body_len) {
+    ivs_event_payload_curl_t *lpayload = NULL;
+
+    switch_zmalloc(lpayload, sizeof(ivs_event_payload_curl_t));
+    lpayload->http_code = http_code;
+    lpayload->body_len = 0;
+
+    if(body_len > 0) {
+        switch_malloc(lpayload->body, body_len);
+        memcpy(lpayload->body, body, body_len);
+        lpayload->body_len = body_len;
+    }
+
+    *payload = lpayload;
+    return SWITCH_STATUS_SUCCESS;
+}
+
+switch_status_t ivs_event_push_curl(switch_queue_t *queue, uint32_t jid, uint32_t http_code, char *body, uint32_t body_len) {
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
+    ivs_event_payload_curl_t *payload = NULL;
+
+    status = ivs_event_payload_curl_alloc(&payload, http_code, body, body_len);
+    if(status == SWITCH_STATUS_SUCCESS) {
+        status = ivs_event_push_dh(queue, jid, IVS_EVENT_CURL_DONE, payload, sizeof(ivs_event_payload_curl_t), (mem_destroy_handler_t *)ivs_event_payload_curl_free);
+    }
+
+    return status;
+}
+
+switch_status_t ivs_event_push_curl2(switch_queue_t *queue, uint32_t jid, ivs_event_payload_curl_t *payload) {
+    return ivs_event_push_dh(queue, jid, IVS_EVENT_CURL_DONE, payload, sizeof(ivs_event_payload_curl_t), (mem_destroy_handler_t *)ivs_event_payload_curl_free);
+}
+
 

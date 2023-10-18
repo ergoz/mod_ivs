@@ -1,6 +1,5 @@
 /**
  * (C)2023 aks
- * https://akscf.me/
  * https://github.com/akscf/
  **/
 #include "ivs_qjs.h"
@@ -350,6 +349,18 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                     if(payload) {
                         JS_SetPropertyStr(ctx, edata_obj, "role", JS_NewString(ctx, payload->role));
                         JS_SetPropertyStr(ctx, edata_obj, "text", JS_NewString(ctx, payload->text));
+                    }
+                    break;
+                }
+                case IVS_EVENT_CURL_DONE: {
+                    ivs_event_payload_curl_t *payload = (ivs_event_payload_curl_t *)event->payload;
+                    edata_obj = JS_NewObject(ctx);
+                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "curl-done"));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+
+                    if(payload) {
+                        JS_SetPropertyStr(ctx, edata_obj, "body", JS_NewStringLen(ctx, payload->body, payload->body_len));
+                        JS_SetPropertyStr(ctx, edata_obj, "code", JS_NewInt32(ctx, payload->http_code));
                     }
                     break;
                 }
