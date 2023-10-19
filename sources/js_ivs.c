@@ -319,10 +319,10 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                         JS_SetPropertyStr(ctx, edata_obj, "samplerate", JS_NewInt32(ctx, payload->samplerate));
                         JS_SetPropertyStr(ctx, edata_obj, "channels", JS_NewInt32(ctx, payload->channels));
                         if(ivs_session->chunk_type == IVS_CHUNK_TYPE_FILE) {
-                            JS_SetPropertyStr(ctx, edata_obj, "format", JS_NewString(ctx, "file"));
+                            JS_SetPropertyStr(ctx, edata_obj, "type", JS_NewString(ctx, "file"));
                             JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, payload->data, payload->data_len));
                         } else if(ivs_session->chunk_type == IVS_CHUNK_TYPE_BUFFER) {
-                            JS_SetPropertyStr(ctx, edata_obj, "format", JS_NewString(ctx, "buffer"));
+                            JS_SetPropertyStr(ctx, edata_obj, "type", JS_NewString(ctx, "buffer"));
                             JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, payload->data_len));
                         }
                     }

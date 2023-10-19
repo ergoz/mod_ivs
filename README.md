@@ -40,7 +40,6 @@ while(!script.isInterrupted()) {
     if(!session.isReady) { break; }
 
     if(!fl_play_hello) {
-        ivs.say("Hello, I'm AI and ready to answer your questions.");
         ivs.say("What can I help you?");
         fl_play_hello = true;
     }

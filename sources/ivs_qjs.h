@@ -14,11 +14,11 @@ typedef struct {
     long                    auth_type;
     uint32_t                connect_timeout;
     uint32_t                request_timeout;
+    uint32_t                method;
     uint8_t                 fl_ssl_verfypeer;
     uint8_t                 fl_ssl_verfyhost;
     char                    *url;
     char                    *cacert;
-    char                    *method;
     char                    *user_agent;
     char                    *credentials;
     char                    *content_type;

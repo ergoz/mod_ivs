@@ -346,27 +346,24 @@ static JSValue js_chatgpt_property_set(JSContext *ctx, JSValueConst this_val, JS
         case PROP_APIKEY: {
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(strcmp(js_chatgpt->apikey, str)) {
-                js_chatgpt->apikey = switch_core_strdup(js_chatgpt->pool, str);
-            }
+            if(!zstr(js_chatgpt->apikey)) { copy = strcmp(js_chatgpt->apikey, str); }
+            if(copy) { js_chatgpt->apikey = switch_core_strdup(js_chatgpt->pool, str); }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_CHAT_MODEL: {
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(strcmp(js_chatgpt->chat_model, str)) {
-                js_chatgpt->chat_model = switch_core_strdup(js_chatgpt->pool, str);
-            }
+            if(!zstr(js_chatgpt->chat_model)) { copy = strcmp(js_chatgpt->chat_model, str); }
+            if(copy) { js_chatgpt->chat_model = switch_core_strdup(js_chatgpt->pool, str); }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_WHISPER_MODEL: {
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(strcmp(js_chatgpt->whisper_model, str)) {
-                js_chatgpt->whisper_model = switch_core_strdup(js_chatgpt->pool, str);
-            }
+            if(!zstr(js_chatgpt->whisper_model)) { copy = strcmp(js_chatgpt->whisper_model, str); }
+            if(copy) { js_chatgpt->whisper_model = switch_core_strdup(js_chatgpt->pool, str); }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
@@ -478,7 +475,7 @@ static JSValue js_chatgpt_do_chat_request(JSContext *ctx, JSValueConst this_val,
     chatgpt_conf->fl_log_http_errors = js_chatgpt->fl_log_http_errors;
     chatgpt_conf->curl_conf->url = CHATGPT_NLP_URL;
     chatgpt_conf->curl_conf->content_type = CHATGPT_NLP_TYPE;
-    chatgpt_conf->curl_conf->curl_auth_type = CURLAUTH_BEARER;
+    chatgpt_conf->curl_conf->auth_type = CURLAUTH_BEARER;
     chatgpt_conf->curl_conf->send_buffer = switch_core_sprintf(chatgpt_conf->pool, "{\"model\": \"%s\", \"messages\": [{\"role\": \"%s\", \"content\": %s}]}", js_chatgpt->chat_model, js_chatgpt->role, (json_text ? json_text : "null"));
     chatgpt_conf->curl_conf->send_buffer_len = strlen(chatgpt_conf->curl_conf->send_buffer);
     chatgpt_conf->curl_conf->request_timeout = js_chatgpt->request_timeout;
@@ -560,7 +557,7 @@ static JSValue js_chatgpt_do_whisper_request(JSContext *ctx, JSValueConst this_v
 
     chatgpt_conf->curl_conf->url = CHATGPT_WHISPER_URL;
     chatgpt_conf->curl_conf->content_type = CHATGPT_WHISPER_TYPE;
-    chatgpt_conf->curl_conf->curl_auth_type = CURLAUTH_BEARER;
+    chatgpt_conf->curl_conf->auth_type = CURLAUTH_BEARER;
     chatgpt_conf->curl_conf->request_timeout = js_chatgpt->request_timeout;
     chatgpt_conf->curl_conf->connect_timeout = js_chatgpt->connect_timeout;
     chatgpt_conf->curl_conf->credentials = safe_pool_strdup(chatgpt_conf->pool, js_chatgpt->apikey);

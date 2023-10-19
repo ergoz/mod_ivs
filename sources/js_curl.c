@@ -124,6 +124,7 @@ static void *SWITCH_THREAD_FUNC js_curl_request_exec_thread(switch_thread_t *thr
     js_creq_conf_free(creq_conf);
     ivs_session_release(ivs_session);
     thread_finished();
+
     return NULL;
 }
 
@@ -152,7 +153,7 @@ static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int m
             return JS_NewString(ctx, js_curl->url);
         }
         case PROP_METHOD: {
-            return JS_NewString(ctx, js_curl->method);
+            return JS_NewString(ctx, curl_method2name(js_curl->method));
         }
         case PROP_SSL_VERFYPEER: {
             return(js_curl->fl_ssl_verfypeer ? JS_TRUE : JS_FALSE);
@@ -236,9 +237,8 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
         case PROP_URL: {
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(strcmp(js_curl->url, str)) {
-                js_curl->url = switch_core_strdup(js_curl->pool, str);
-            }
+            if(!zstr(js_curl->url)) { copy = strcmp(js_curl->url, str); }
+            if(copy) { js_curl->url = switch_core_strdup(js_curl->pool, str); }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
@@ -308,9 +308,7 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
         case PROP_METHOD: {
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
             str = JS_ToCString(ctx, val);
-            if(strcmp(js_curl->method, str)) {
-                js_curl->method = switch_core_strdup(js_curl->pool, str);
-            }
+            js_curl->method = curl_method2id(str);
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
@@ -400,9 +398,9 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
 }
 
 /**
- ** send( [stringBuffer] || {type: [file|simple], name: fieldName, value: fieldValue}, {...})
+ ** perform( [string|arrayBuffer] || {type: [file|simple], name: fieldName, value: fieldValue}, {...})
  **/
-static JSValue js_curl_send_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_curl_perform_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     ivs_session_t *ivs_session = JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
@@ -411,8 +409,11 @@ static JSValue js_curl_send_request(JSContext *ctx, JSValueConst this_val, int a
 
     CURL_SANITY_CHECK();
 
+    if(!ivs_session) {
+        return JS_ThrowTypeError(ctx, "Malformed reference: ivs_session");
+    }
     if(zstr(js_curl->url)) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "URL undefined\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "js_curl->url == NULL\n");
         switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
@@ -423,35 +424,43 @@ static JSValue js_curl_send_request(JSContext *ctx, JSValueConst this_val, int a
     if(argc > 0) {
         for(int i = 0; i < argc; i++) {
             if(JS_IsString(argv[i])) {
-                if(!creq_conf->curl_conf->send_buffer) {
+                if(creq_conf->curl_conf->send_buffer == NULL) {
                     const char *data = JS_ToCString(ctx, argv[i]);
                     if(data) {
                         creq_conf->curl_conf->send_buffer = switch_core_strdup(creq_conf->pool, data);
-                        creq_conf->curl_conf->send_buffer_ref = creq_conf->curl_conf->send_buffer;
                         creq_conf->curl_conf->send_buffer_len = strlen(creq_conf->curl_conf->send_buffer);
                     }
                     JS_FreeCString(ctx, data);
                 }
             } else if(JS_IsObject(argv[i])) {
-                JSValue field_type,  field_name, field_value;
-                field_type = JS_GetPropertyStr(ctx, argv[i], "type");
-                field_name = JS_GetPropertyStr(ctx, argv[i], "name");
-                field_value = JS_GetPropertyStr(ctx, argv[i], "value");
+                switch_size_t abuf_len = 0;
+                uint8_t *abuf = NULL;
 
-                if(JS_IsString(field_type) && JS_IsString(field_name)) {
-                    const char *ftype = NULL, *fname = NULL, *fval = NULL;
-                    ftype = JS_ToCString(ctx, field_type);
-                    fname = JS_ToCString(ctx, field_name);
-                    fval = JS_ToCString(ctx, field_value);
+                abuf = JS_GetArrayBuffer(ctx, &abuf_len, argv[i]);
+                if(abuf && abuf_len > 0)  {
+                    if(creq_conf->curl_conf->send_buffer == NULL) {
+                        creq_conf->curl_conf->send_buffer = safe_pool_bufdup(creq_conf->pool, abuf, abuf_len);
+                        creq_conf->curl_conf->send_buffer_len = abuf_len;
+                    }
+                } else {
+                    JSValue field_type,  field_name, field_value;
+                    field_type = JS_GetPropertyStr(ctx, argv[i], "type");
+                    field_name = JS_GetPropertyStr(ctx, argv[i], "name");
+                    field_value = JS_GetPropertyStr(ctx, argv[i], "value");
 
-                    status = curl_field_add(creq_conf->curl_conf, (!strcasecmp(ftype, "file") ? CURL_FIELD_TYPE_FILE : CURL_FIELD_TYPE_SIMPLE), (char *)fname, (char *)fval);
+                    if(JS_IsString(field_type) && JS_IsString(field_name)) {
+                        const char *ftype = NULL, *fname = NULL, *fval = NULL;
+                        ftype = JS_ToCString(ctx, field_type);
+                        fname = JS_ToCString(ctx, field_name);
+                        fval = JS_ToCString(ctx, field_value);
 
-                    JS_FreeCString(ctx, ftype);
-                    JS_FreeCString(ctx, fname);
-                    JS_FreeCString(ctx, fval);
+                        status = curl_field_add(creq_conf->curl_conf, (!strcasecmp(ftype, "file") ? CURL_FIELD_TYPE_FILE : CURL_FIELD_TYPE_SIMPLE), (char *)fname, (char *)fval);
 
-                    if(status != SWITCH_STATUS_SUCCESS) {
-                        break;
+                        JS_FreeCString(ctx, ftype);
+                        JS_FreeCString(ctx, fname);
+                        JS_FreeCString(ctx, fval);
+
+                        if(status != SWITCH_STATUS_SUCCESS) { break; }
                     }
                 }
             }
@@ -460,15 +469,19 @@ static JSValue js_curl_send_request(JSContext *ctx, JSValueConst this_val, int a
 
     if(status == SWITCH_STATUS_SUCCESS) {
         creq_conf->ivs_session_ref = ivs_session;
+
         creq_conf->curl_conf->content_type = switch_core_sprintf(creq_conf->pool, "Content-Type: %s", (js_curl->content_type ? js_curl->content_type : DEFAULT_CONTENT_TYPE));
         creq_conf->curl_conf->url = safe_pool_strdup(creq_conf->pool, js_curl->url);
         creq_conf->curl_conf->user_agent = safe_pool_strdup(creq_conf->pool, js_curl->user_agent);
         creq_conf->curl_conf->credentials = safe_pool_strdup(creq_conf->pool, js_curl->credentials);
         creq_conf->curl_conf->proxy_credentials = safe_pool_strdup(creq_conf->pool, js_curl->proxy_credentials);
         creq_conf->curl_conf->proxy = safe_pool_strdup(creq_conf->pool, js_curl->proxy);
+        creq_conf->curl_conf->cacert = safe_pool_strdup(creq_conf->pool, js_curl->cacert);
+        creq_conf->curl_conf->proxy_cacert = safe_pool_strdup(creq_conf->pool, js_curl->proxy_cacert);
         creq_conf->curl_conf->request_timeout = js_curl->request_timeout;
         creq_conf->curl_conf->connect_timeout = js_curl->connect_timeout;
-        creq_conf->curl_conf->curl_auth_type = js_curl->auth_type;
+        creq_conf->curl_conf->method = js_curl->method;
+        creq_conf->curl_conf->auth_type = js_curl->auth_type;
         creq_conf->curl_conf->ssl_verfyhost = js_curl->fl_ssl_verfyhost;
         creq_conf->curl_conf->ssl_verfypeer = js_curl->fl_ssl_verfypeer;
 
@@ -489,16 +502,20 @@ out:
 /**
  ** async way
  **/
-static JSValue js_curl_send_request_async(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_curl_perform_request_async(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     ivs_session_t *ivs_session = JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
     js_creq_conf_t *creq_conf = NULL;
     JSValue ret_obj = JS_FALSE;
+
     CURL_SANITY_CHECK();
 
+    if(!ivs_session) {
+        return JS_ThrowTypeError(ctx, "Malformed reference: ivs_session");
+    }
     if(zstr(js_curl->url)) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "URL undefined\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "js_curl->url == NULL\n");
         switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
@@ -509,35 +526,43 @@ static JSValue js_curl_send_request_async(JSContext *ctx, JSValueConst this_val,
     if(argc > 0) {
         for(int i = 0; i < argc; i++) {
             if(JS_IsString(argv[i])) {
-                if(!creq_conf->curl_conf->send_buffer) {
+                if(creq_conf->curl_conf->send_buffer == NULL) {
                     const char *data = JS_ToCString(ctx, argv[i]);
                     if(data) {
                         creq_conf->curl_conf->send_buffer = switch_core_strdup(creq_conf->pool, data);
-                        creq_conf->curl_conf->send_buffer_ref = creq_conf->curl_conf->send_buffer;
                         creq_conf->curl_conf->send_buffer_len = strlen(creq_conf->curl_conf->send_buffer);
                     }
                     JS_FreeCString(ctx, data);
                 }
             } else if(JS_IsObject(argv[i])) {
-                JSValue field_type,  field_name, field_value;
-                field_type = JS_GetPropertyStr(ctx, argv[i], "type");
-                field_name = JS_GetPropertyStr(ctx, argv[i], "name");
-                field_value = JS_GetPropertyStr(ctx, argv[i], "value");
+                switch_size_t abuf_len = 0;
+                uint8_t *abuf = NULL;
 
-                if(JS_IsString(field_type) && JS_IsString(field_name)) {
-                    const char *ftype = NULL, *fname = NULL, *fval = NULL;
-                    ftype = JS_ToCString(ctx, field_type);
-                    fname = JS_ToCString(ctx, field_name);
-                    fval = JS_ToCString(ctx, field_value);
+                abuf = JS_GetArrayBuffer(ctx, &abuf_len, argv[i]);
+                if(abuf && abuf_len > 0)  {
+                    if(creq_conf->curl_conf->send_buffer == NULL) {
+                        creq_conf->curl_conf->send_buffer = safe_pool_bufdup(creq_conf->pool, abuf, abuf_len);
+                        creq_conf->curl_conf->send_buffer_len = abuf_len;
+                    }
+                } else {
+                    JSValue field_type,  field_name, field_value;
+                    field_type = JS_GetPropertyStr(ctx, argv[i], "type");
+                    field_name = JS_GetPropertyStr(ctx, argv[i], "name");
+                    field_value = JS_GetPropertyStr(ctx, argv[i], "value");
 
-                    status = curl_field_add(creq_conf->curl_conf, (!strcasecmp(ftype, "file") ? CURL_FIELD_TYPE_FILE : CURL_FIELD_TYPE_SIMPLE), (char *)fname, (char *)fval);
+                    if(JS_IsString(field_type) && JS_IsString(field_name)) {
+                        const char *ftype = NULL, *fname = NULL, *fval = NULL;
+                        ftype = JS_ToCString(ctx, field_type);
+                        fname = JS_ToCString(ctx, field_name);
+                        fval = JS_ToCString(ctx, field_value);
 
-                    JS_FreeCString(ctx, ftype);
-                    JS_FreeCString(ctx, fname);
-                    JS_FreeCString(ctx, fval);
+                        status = curl_field_add(creq_conf->curl_conf, (!strcasecmp(ftype, "file") ? CURL_FIELD_TYPE_FILE : CURL_FIELD_TYPE_SIMPLE), (char *)fname, (char *)fval);
 
-                    if(status != SWITCH_STATUS_SUCCESS) {
-                        break;
+                        JS_FreeCString(ctx, ftype);
+                        JS_FreeCString(ctx, fname);
+                        JS_FreeCString(ctx, fval);
+
+                        if(status != SWITCH_STATUS_SUCCESS) { break; }
                     }
                 }
             }
@@ -552,9 +577,12 @@ static JSValue js_curl_send_request_async(JSContext *ctx, JSValueConst this_val,
         creq_conf->curl_conf->credentials = safe_pool_strdup(creq_conf->pool, js_curl->credentials);
         creq_conf->curl_conf->proxy_credentials = safe_pool_strdup(creq_conf->pool, js_curl->proxy_credentials);
         creq_conf->curl_conf->proxy = safe_pool_strdup(creq_conf->pool, js_curl->proxy);
+        creq_conf->curl_conf->cacert = safe_pool_strdup(creq_conf->pool, js_curl->cacert);
+        creq_conf->curl_conf->proxy_cacert = safe_pool_strdup(creq_conf->pool, js_curl->proxy_cacert);
         creq_conf->curl_conf->connect_timeout = js_curl->connect_timeout;
         creq_conf->curl_conf->request_timeout = js_curl->request_timeout;
-        creq_conf->curl_conf->curl_auth_type = js_curl->auth_type;
+        creq_conf->curl_conf->method = js_curl->method;
+        creq_conf->curl_conf->auth_type = js_curl->auth_type;
         creq_conf->curl_conf->ssl_verfyhost = js_curl->fl_ssl_verfyhost;
         creq_conf->curl_conf->ssl_verfypeer = js_curl->fl_ssl_verfypeer;
 
@@ -590,8 +618,8 @@ static const JSCFunctionListEntry js_curl_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("proxyCredentials", js_curl_property_get, js_curl_property_set, PROP_PROXY_CREDENTIALS),
     JS_CGETSET_MAGIC_DEF("proxyCAcert", js_curl_property_get, js_curl_property_set, PROP_SSL_PROXY_CACERT),
     //
-    JS_CFUNC_DEF("send", 1, js_curl_send_request),
-    JS_CFUNC_DEF("sendAsync", 1, js_curl_send_request_async),
+    JS_CFUNC_DEF("perform", 1, js_curl_perform_request),
+    JS_CFUNC_DEF("performAsync", 1, js_curl_perform_request_async),
 };
 
 static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
@@ -666,7 +694,7 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
 
     js_curl->pool = pool;
     js_curl->url = switch_core_strdup(pool, url);
-    js_curl->method = (method ? switch_core_strdup(pool, method) : "GET");
+    js_curl->method = curl_method2id(method);
     js_curl->credentials = (credentials ? switch_core_strdup(pool, credentials) : NULL);
     js_curl->content_type = (content_type ? switch_core_strdup(pool, content_type) : DEFAULT_CONTENT_TYPE);
     js_curl->request_timeout = timeout;

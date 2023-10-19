@@ -115,7 +115,7 @@ void *SWITCH_THREAD_FUNC script_maintenance_thread(switch_thread_t *thread, void
         goto out;
     }
 
-    // sip session
+    // sip session (todo: will do over...)
     if(ivs_session->session) {
         uint32_t tbuf2_len = 0;
         char *tbuf1 = NULL, *tbuf2 = NULL;

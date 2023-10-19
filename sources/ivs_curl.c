@@ -4,7 +4,6 @@
  **/
 #include <ivs_curl.h>
 
-
 extern globals_t globals;
 
 static size_t curl_io_write_callback(char *buffer, size_t size, size_t nitems, void *user_data) {
@@ -48,12 +47,24 @@ switch_status_t curl_perform(curl_conf_t *curl_config) {
     headers = switch_curl_slist_append(headers, curl_config->content_type);
 
     switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
-    switch_curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
     switch_curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
 
+    if(curl_config->method == CURL_METHOD_GET) {
+        switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1);
+    } else if(curl_config->method == CURL_METHOD_POST) {
+        switch_curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
+    } else if(curl_config->method == CURL_METHOD_PUT) {
+        switch_curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
+        switch_curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PUT");
+    } else if(curl_config->method == CURL_METHOD_DELETE) {
+        switch_curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+    }
+
     if(curl_config->send_buffer) {
-        switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE, curl_config->send_buffer_len);
-        switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, (void *) curl_config->send_buffer_ref);
+        if(curl_config->method == CURL_METHOD_POST || curl_config->method == CURL_METHOD_DELETE || curl_config->method == CURL_METHOD_PUT) {
+            switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE, curl_config->send_buffer_len);
+            switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, (void *) curl_config->send_buffer_ref);
+        }
         switch_curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, curl_io_read_callback);
         switch_curl_easy_setopt(curl_handle, CURLOPT_READDATA, (void *) curl_config);
     }
@@ -72,15 +83,18 @@ switch_status_t curl_perform(curl_conf_t *curl_config) {
         switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, curl_config->user_agent);
     }
     if(curl_config->credentials) {
-        if(curl_config->curl_auth_type == CURLAUTH_BEARER) { // require curl-7.61.0
+        if(curl_config->auth_type == CURLAUTH_BEARER) { // require curl-7.61.0 or higher
             curl_easy_setopt(curl_handle, CURLOPT_XOAUTH2_BEARER, curl_config->credentials);
             curl_easy_setopt(curl_handle, CURLOPT_HTTPAUTH, CURLAUTH_BEARER);
         } else {
-            switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPAUTH, curl_config->curl_auth_type);
+            switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPAUTH, curl_config->auth_type);
             switch_curl_easy_setopt(curl_handle, CURLOPT_USERPWD, curl_config->credentials);
         }
     }
     if(strncasecmp(curl_config->url, "https", 5) == 0) {
+        if(!zstr(curl_config->cacert)) {
+             switch_curl_easy_setopt(curl_handle, CURLOPT_CAINFO, curl_config->cacert);
+        }
         switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, curl_config->ssl_verfypeer);
         switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, curl_config->ssl_verfyhost);
     }
@@ -90,7 +104,11 @@ switch_status_t curl_perform(curl_conf_t *curl_config) {
             switch_curl_easy_setopt(curl_handle, CURLOPT_PROXYUSERPWD, curl_config->proxy_credentials);
         }
         if(strncasecmp(curl_config->proxy, "https", 5) == 0) {
-            switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYPEER, 0);
+            if(!zstr(curl_config->proxy_cacert)) {
+                switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_CAINFO, curl_config->proxy_cacert);
+            }
+            switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYPEER, curl_config->proxy_insecure);
+            switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYHOST, curl_config->proxy_insecure);
         }
         switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY, curl_config->proxy);
     }
@@ -195,7 +213,8 @@ switch_status_t curl_config_alloc(curl_conf_t **curl_config, switch_memory_pool_
     lconf->fields = NULL;
     lconf->send_buffer = NULL;
     lconf->send_buffer_len = 0;
-    lconf->curl_auth_type = CURLAUTH_ANY;
+    lconf->auth_type = CURLAUTH_ANY;
+    lconf->method = CURL_METHOD_GET;
     lconf->ssl_verfypeer = 0;
     lconf->ssl_verfyhost = 0;
 
@@ -227,4 +246,33 @@ void curl_config_free(curl_conf_t *curl_config) {
             }
         }
     }
+}
+
+uint32_t curl_method2id(const char *name) {
+    if(zstr(name)) {
+        return CURL_METHOD_GET;
+    }
+    if(strcasecmp(name, "GET") == 0) {
+        return CURL_METHOD_GET;
+    }
+    if(strcasecmp(name, "POST") == 0) {
+        return CURL_METHOD_POST;
+    }
+    if(strcasecmp(name, "PUT") == 0) {
+        return CURL_METHOD_PUT;
+    }
+    if(strcasecmp(name, "DELETE") == 0) {
+        return CURL_METHOD_DELETE;
+    }
+    return CURL_METHOD_GET;
+}
+
+const char *curl_method2name(uint32_t id) {
+    switch(id) {
+        case CURL_METHOD_GET    : return "GET";
+        case CURL_METHOD_POST   : return "POST";
+        case CURL_METHOD_PUT    : return "PUT";
+        case CURL_METHOD_DELETE : return "DELETE";
+    }
+    return "GET";
 }

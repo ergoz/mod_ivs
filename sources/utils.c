@@ -183,3 +183,18 @@ char *safe_pool_strdup(switch_memory_pool_t *pool, const char *str) {
     if(zstr(str)) { return NULL; }
     return switch_core_strdup(pool, str);
 }
+
+uint8_t *safe_pool_bufdup(switch_memory_pool_t *pool, uint8_t *buffer, switch_size_t len) {
+    uint8_t *buffer_local = NULL;
+    switch_assert(pool);
+
+    if(buffer && len > 0) {
+        buffer_local = switch_core_alloc(pool, len);
+        if(buffer_local == NULL) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
+            return NULL;
+        }
+        memcpy(buffer_local, buffer, len);
+    }
+    return buffer_local;
+}
