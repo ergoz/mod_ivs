@@ -338,33 +338,42 @@ static JSValue js_chatgpt_property_get(JSContext *ctx, JSValueConst this_val, in
 static JSValue js_chatgpt_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_chatgpt_t *js_chatgpt = JS_GetOpaque2(ctx, this_val, js_chatgpt_get_classid(ctx));
     const char *str = NULL;
-    int copy = 1, success = 1;
+    int copy = 1;
 
     if(!js_chatgpt) { return JS_UNDEFINED; }
 
     switch(magic) {
         case PROP_APIKEY: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            str = JS_ToCString(ctx, val);
-            if(!zstr(js_chatgpt->apikey)) { copy = strcmp(js_chatgpt->apikey, str); }
-            if(copy) { js_chatgpt->apikey = switch_core_strdup(js_chatgpt->pool, str); }
-            JS_FreeCString(ctx, str);
+            if(QJS_IS_NULL(val)) {
+                return JS_FALSE;
+            } else {
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->apikey)) { copy = strcmp(js_chatgpt->apikey, str); }
+                if(copy) { js_chatgpt->apikey = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
+            }
             return JS_TRUE;
         }
         case PROP_CHAT_MODEL: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            str = JS_ToCString(ctx, val);
-            if(!zstr(js_chatgpt->chat_model)) { copy = strcmp(js_chatgpt->chat_model, str); }
-            if(copy) { js_chatgpt->chat_model = switch_core_strdup(js_chatgpt->pool, str); }
-            JS_FreeCString(ctx, str);
+            if(QJS_IS_NULL(val)) {
+                return JS_FALSE;
+            } else {
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->chat_model)) { copy = strcmp(js_chatgpt->chat_model, str); }
+                if(copy) { js_chatgpt->chat_model = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
+            }
             return JS_TRUE;
         }
         case PROP_WHISPER_MODEL: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            str = JS_ToCString(ctx, val);
-            if(!zstr(js_chatgpt->whisper_model)) { copy = strcmp(js_chatgpt->whisper_model, str); }
-            if(copy) { js_chatgpt->whisper_model = switch_core_strdup(js_chatgpt->pool, str); }
-            JS_FreeCString(ctx, str);
+            if(QJS_IS_NULL(val)) {
+                return JS_FALSE;
+            } else {
+                str = JS_ToCString(ctx, val);
+                if(!zstr(js_chatgpt->whisper_model)) { copy = strcmp(js_chatgpt->whisper_model, str); }
+                if(copy) { js_chatgpt->whisper_model = switch_core_strdup(js_chatgpt->pool, str); }
+                JS_FreeCString(ctx, str);
+            }
             return JS_TRUE;
         }
         case PROP_USER_AGENT: {

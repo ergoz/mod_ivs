@@ -3,6 +3,7 @@
  * https://github.com/akscf/
  **/
 #include "ivs_qjs.h"
+#include "js_ivs_hlp.h"
 #include "js_ivs_wrp.h"
 
 #define CLASS_NAME                  "IVS"
@@ -12,7 +13,7 @@
 #define PROP_ASR_ENGINE             3
 #define PROP_VAD_STATE              4
 #define PROP_CHUNK_TYPE             5
-#define PROP_CHUNK_FILE_TYPE         6
+#define PROP_CHUNK_ENCODING         6
 
 #define IVS_SESSION_SANITY_CHECK() if (!js_ivs || !js_ivs->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -36,47 +37,22 @@ static JSValue js_ivs_property_get(JSContext *ctx, JSValueConst this_val, int ma
             return JS_NewString(ctx, ivs_session->session_id);
         }
         case PROP_LANGUAGE: {
-            ret_val = JS_NewString(ctx, ivs_session->language);
-            return ret_val;
+            return JS_NewString(ctx, ivs_session->language);
         }
         case PROP_TTS_ENGINE: {
-            ret_val = JS_NewString(ctx, ivs_session->tts_engine);
-            return ret_val;
+            return JS_NewString(ctx, ivs_session->tts_engine);
         }
         case PROP_ASR_ENGINE: {
-            ret_val = JS_NewString(ctx, ivs_session->asr_engine);
-            return ret_val;
+            return JS_NewString(ctx, ivs_session->asr_engine);
         }
         case PROP_CHUNK_TYPE: {
-            if(ivs_session->chunk_type == IVS_CHUNK_TYPE_FILE) {
-                return JS_NewString(ctx, "file");
-            }
-            if(ivs_session->chunk_type == IVS_CHUNK_TYPE_BUFFER) {
-                return JS_NewString(ctx, "buffer");
-            }
-            return JS_UNDEFINED;
+            return JS_NewString(ctx, ivs_chunkType2name(ivs_session->chunk_type));
         }
-        case PROP_CHUNK_FILE_TYPE: {
-            return (ivs_session->chunk_file_ext ? JS_NewString(ctx, ivs_session->chunk_file_ext) : JS_UNDEFINED);
+        case PROP_CHUNK_ENCODING: {
+            return JS_NewString(ctx, ivs_chunkEncoding2name(ivs_session->chunk_encoding));
         }
-
         case PROP_VAD_STATE: {
-            switch_vad_state_t vad_state = 0;
-            vad_state = ivs_session->vad_state;
-
-            if(vad_state == SWITCH_VAD_STATE_NONE) {
-                return JS_NewString(ctx, "none");
-            }
-            if(vad_state == SWITCH_VAD_STATE_START_TALKING) {
-                return JS_NewString(ctx, "start-talking");
-            }
-            if(vad_state == SWITCH_VAD_STATE_STOP_TALKING) {
-                return JS_NewString(ctx, "stop-talking");
-            }
-            if(vad_state == SWITCH_VAD_STATE_TALKING) {
-                return JS_NewString(ctx, "talking");
-            }
-            return JS_UNDEFINED;
+            return JS_NewString(ctx, ivs_vadState2name(ivs_session->vad_state));
         }
     }
     return JS_UNDEFINED;
@@ -86,7 +62,7 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     ivs_session_t *ivs_session = js_ivs->session;
     const char *str = NULL;
-    int copy = 1, success = 0;
+    uint8_t copy = 1;
 
     if(!js_ivs || !ivs_session) {
         return JS_UNDEFINED;
@@ -94,83 +70,73 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
 
     switch(magic) {
         case PROP_LANGUAGE: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 ivs_session->language = NULL;
             } else {
+                str = JS_ToCString(ctx, val);
                 if(!zstr(ivs_session->language)) { copy = strcmp(ivs_session->language, str); }
                 if(copy) {
                     switch_mutex_lock(ivs_session->mutex);
                     ivs_session->language = switch_core_strdup(ivs_session->script->pool, str);
                     switch_mutex_unlock(ivs_session->mutex);
                 }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_TTS_ENGINE: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 ivs_session->tts_engine = NULL;
             } else {
+                str = JS_ToCString(ctx, val);
                 if(!zstr(ivs_session->tts_engine)) { copy = strcmp(ivs_session->tts_engine, str); }
                 if(copy) {
                     switch_mutex_lock(ivs_session->mutex);
                     ivs_session->tts_engine = switch_core_strdup(ivs_session->script->pool, str);
                     switch_mutex_unlock(ivs_session->mutex);
                 }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_ASR_ENGINE: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
+            if(QJS_IS_NULL(val)) {
                 ivs_session->asr_engine = NULL;
             } else {
+                str = JS_ToCString(ctx, val);
                 if(!zstr(ivs_session->asr_engine)) { copy = strcmp(ivs_session->asr_engine, str); }
                 if(copy) {
                     switch_mutex_lock(ivs_session->mutex);
                     ivs_session->asr_engine = switch_core_strdup(ivs_session->script->pool, str);
                     switch_mutex_unlock(ivs_session->mutex);
                 }
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
         case PROP_CHUNK_TYPE: {
-            str = JS_ToCString(ctx, val);
-            if(!zstr(str)) {
-                if(strcasecmp(str, "file") == 0) {
-                    switch_mutex_lock(ivs_session->mutex);
-                    ivs_session->chunk_type = IVS_CHUNK_TYPE_FILE;
-                    switch_mutex_unlock(ivs_session->mutex);
-                    success = 1;
-                } else if(strcasecmp(str, "buffer") == 0) {
-                    switch_mutex_lock(ivs_session->mutex);
-                    ivs_session->chunk_type = IVS_CHUNK_TYPE_BUFFER;
-                    switch_mutex_unlock(ivs_session->mutex);
-                    success = 1;
-                }
-            }
-            JS_FreeCString(ctx, str);
-            return (success ? JS_TRUE : JS_FALSE);
-        }
-        case PROP_CHUNK_FILE_TYPE: {
-            str = JS_ToCString(ctx, val);
-            if(zstr(str)) {
-                ivs_session->chunk_file_ext = NULL;
+            if(QJS_IS_NULL(val)) {
+                return JS_FALSE;
             } else {
-                if(!zstr(ivs_session->chunk_file_ext)) { copy = strcmp(ivs_session->chunk_file_ext, str); }
-                if(copy) {
-                    switch_mutex_lock(ivs_session->mutex);
-                    ivs_session->chunk_file_ext = switch_core_strdup(ivs_session->script->pool, str);
-                    ivs_session->fl_chunk_file_ext_changed = true;
-                    switch_mutex_unlock(ivs_session->mutex);
-                }
+                str = JS_ToCString(ctx, val);
+                switch_mutex_lock(ivs_session->mutex);
+                ivs_session->chunk_type = ivs_chunkType2id(str);
+                switch_mutex_unlock(ivs_session->mutex);
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
-            return (success ? JS_TRUE : JS_FALSE);
+            return JS_TRUE;
+        }
+        case PROP_CHUNK_ENCODING: {
+            if(QJS_IS_NULL(val)) {
+                return JS_FALSE;
+            } else {
+                str = JS_ToCString(ctx, val);
+                switch_mutex_lock(ivs_session->mutex);
+                ivs_session->chunk_encoding = ivs_chunkEncoding2id(str);
+                switch_mutex_unlock(ivs_session->mutex);
+                JS_FreeCString(ctx, str);
+            }
+            return JS_TRUE;
         }
     }
     return JS_FALSE;
@@ -213,7 +179,7 @@ static JSValue js_ivs_say(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     return ret_val;
 }
 
-// playback("file_to_play", [async: true/false], [delete_after_paly: true/false])
+// playback("file_to_play", [delete_after_paly: true/false], [async: true/false])
 static JSValue js_ivs_playback(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     ivs_session_t *ivs_session = js_ivs->session;
@@ -232,10 +198,10 @@ static JSValue js_ivs_playback(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_ThrowTypeError(ctx, "Invalid argument: filename");
     }
     if(argc > 1) {
-        fl_async = JS_ToBool(ctx, argv[1]);
+        fl_delete = JS_ToBool(ctx, argv[1]);
     }
     if(argc > 2) {
-        fl_delete = JS_ToBool(ctx, argv[2]);
+        fl_async = JS_ToBool(ctx, argv[2]);
     }
 
     if(fl_async) {
@@ -314,15 +280,14 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                     JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
 
                     if(payload) {
+                        JS_SetPropertyStr(ctx, edata_obj, "type", JS_NewString(ctx, ivs_chunkType2name(ivs_session->chunk_type)));
                         JS_SetPropertyStr(ctx, edata_obj, "time", JS_NewInt32(ctx, payload->time));
                         JS_SetPropertyStr(ctx, edata_obj, "length", JS_NewInt32(ctx, payload->length));
                         JS_SetPropertyStr(ctx, edata_obj, "samplerate", JS_NewInt32(ctx, payload->samplerate));
                         JS_SetPropertyStr(ctx, edata_obj, "channels", JS_NewInt32(ctx, payload->channels));
                         if(ivs_session->chunk_type == IVS_CHUNK_TYPE_FILE) {
-                            JS_SetPropertyStr(ctx, edata_obj, "type", JS_NewString(ctx, "file"));
                             JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, payload->data, payload->data_len));
                         } else if(ivs_session->chunk_type == IVS_CHUNK_TYPE_BUFFER) {
-                            JS_SetPropertyStr(ctx, edata_obj, "type", JS_NewString(ctx, "buffer"));
                             JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, payload->data_len));
                         }
                     }
@@ -389,7 +354,7 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("asrEngine", js_ivs_property_get, js_ivs_property_set, PROP_ASR_ENGINE),
     JS_CGETSET_MAGIC_DEF("vadState", js_ivs_property_get, js_ivs_property_set, PROP_VAD_STATE),
     JS_CGETSET_MAGIC_DEF("chunkType", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_TYPE),
-    JS_CGETSET_MAGIC_DEF("chunkFileType", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_FILE_TYPE),
+    JS_CGETSET_MAGIC_DEF("chunkEncoding", js_ivs_property_get, js_ivs_property_set, PROP_CHUNK_ENCODING),
     //
     JS_CFUNC_DEF("say", 1, js_ivs_say),
     JS_CFUNC_DEF("playback", 1, js_ivs_playback),

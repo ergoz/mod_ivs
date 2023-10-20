@@ -26,20 +26,27 @@
 #define BIT_CLEAR(a,b) ((a) &= ~(1UL<<(b)))
 #define BIT_CHECK(a,b) (!!((a) & (1UL<<(b))))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#define BASE64_ENC_SZ(n) (4*(n/3))
+#define BASE64_DEC_SZ(n) ((n*3)/4)
 
-#define IVS_VERSION                 "1.0 (a51)"
-#define AUDIO_BUFFER_SIZE           (8*1024) // SWITCH_RECOMMENDED_BUFFER_SIZE
-#define AUDIO_QUEUE_SIZE            64
-#define EVENTS_QUEUE_SIZE           128
-#define VAD_STORE_FRAMES            64
-#define VAD_RECOVERY_FRAMES         15
+#define IVS_VERSION                     "1.0 (a52)"
+#define AUDIO_BUFFER_SIZE               (8*1024) // SWITCH_RECOMMENDED_BUFFER_SIZE
+#define AUDIO_QUEUE_SIZE                64
+#define EVENTS_QUEUE_SIZE               128
+#define VAD_STORE_FRAMES                64
+#define VAD_RECOVERY_FRAMES             15
 
-#define IVS_CHUNK_TYPE_BUFFER       0x0 // L16
-#define IVS_CHUNK_TYPE_FILE         0x1 // file
+#define IVS_CHUNK_TYPE_BUFFER           0
+#define IVS_CHUNK_TYPE_FILE             1
+#define IVS_CHUNK_ENCODING_NONE         0 // not defined
+#define IVS_CHUNK_ENCODING_WAV          1 // FILE_WAV
+#define IVS_CHUNK_ENCODING_MP3          2 // FILE_MP3
+#define IVS_CHUNK_ENCODING_RAW          3 // BUFFER_L16
+#define IVS_CHUNK_ENCODING_B64          4 // BUFFER_BASE64
 
-#define JID_NONE                    0x0
+#define JID_NONE                        0x0
 
-#define IVS_SF_PLAYBACK             0x00
+#define IVS_SF_PLAYBACK                 0x0
 
 #define IVS_EVENTSQ(ivs_session)     (ivs_session->events)
 
@@ -91,9 +98,9 @@ typedef struct {
     const char              *language;
     const char              *tts_engine;
     const char              *asr_engine;
-    const char              *chunk_file_ext; // mp3, wav
     switch_vad_state_t      vad_state;
     time_t                  start_ts;
+    uint32_t                chunk_encoding;
     uint32_t                chunk_type;
     uint32_t                job_id_cnt;
     uint32_t                wlocki;
@@ -108,7 +115,6 @@ typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_do_destroy;
     uint8_t                 fl_destroyed;
-    uint8_t                 fl_chunk_file_ext_changed;
 } ivs_session_t;
 
 typedef struct {

@@ -4,6 +4,7 @@ if(typeof(ivs) == 'undefined') {
 
 // ----------------------------------------------------------------------------------------------------------------------
 ivs.chunkType = 'buffer';
+ivs.chunkEncoding = "b64";
 
 var curl = new CURL('http://127.0.0.1/', 'PUT');
 curl.connectTimeout = 2;
@@ -16,7 +17,7 @@ while(!script.isInterrupted()) {
     if(event) {
 	if(event.type == "chunk-ready") {	    
     	    if(event.data.type == 'buffer') {
-		url.performAsync(event.data.buffer);
+		curl.performAsync(event.data.buffer);
 	    }
         }
         if(event.type == 'curl-done') {

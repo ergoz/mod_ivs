@@ -41,12 +41,13 @@ switch_status_t ivs_event_push_dh(switch_queue_t *queue, uint32_t jid, uint32_t 
 typedef struct {
     uint32_t        samplerate;
     uint32_t        channels;
-    uint32_t        time;       // chunk sec
-    uint32_t        length;     // chunk bytes
-    uint32_t        data_len;
-    uint8_t         *data;      // filename or raw data
+    uint32_t        time;       // chunk size in sec
+    uint32_t        length;     // chunk size in bytes
+    uint32_t        data_len;   // actual data length
+    uint8_t         *data;      // samples
 } ivs_event_payload_mchunk_t;
 switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len);
+switch_status_t ivs_event_push_chunk_ready_zerocopy(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* nlp result */

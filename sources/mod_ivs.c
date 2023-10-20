@@ -5,6 +5,7 @@
 #include "mod_ivs.h"
 #include "ivs_playback.h"
 #include "ivs_events.h"
+#include "js_ivs_hlp.h"
 #include "ivs_qjs.h"
 
 globals_t globals;
@@ -187,11 +188,11 @@ SWITCH_STANDARD_APP(ivs_dp_app) {
     ivs_session->chunk_buffer_size = ((globals.cfg_chunk_len_sec * read_impl.actual_samples_per_second) * sizeof(int16_t));
     ivs_session->vad_buffer_size = (ivs_session->decoded_bytes_per_packet * VAD_STORE_FRAMES);
     //
-    ivs_session->chunk_file_ext = "mp3";
-    ivs_session->chunk_type = IVS_CHUNK_TYPE_BUFFER;
     ivs_session->language = globals.default_language;
     ivs_session->tts_engine = globals.default_tts_engine;
     ivs_session->asr_engine = globals.default_asr_engine;
+    ivs_session->chunk_type = IVS_CHUNK_TYPE_BUFFER;
+    ivs_session->chunk_encoding = IVS_CHUNK_ENCODING_RAW;
     //
     ivs_session->start_ts = switch_epoch_time_now(NULL);
 
@@ -457,8 +458,8 @@ static void *SWITCH_THREAD_FUNC audio_processing_thread(switch_thread_t *thread,
     switch_core_session_t *session = ivs_session->session;
     switch_memory_pool_t *pool = NULL;
     switch_buffer_t *chunk_buffer = NULL;
-    char *file_ext_local = NULL;
-    uint32_t chunk_type_local = 0;
+    uint32_t chunk_type_local = 0, chunk_encoding_local = 0;
+
     uint8_t fl_chunk_ready = false;
     void *pop = NULL;
 
@@ -470,6 +471,7 @@ static void *SWITCH_THREAD_FUNC audio_processing_thread(switch_thread_t *thread,
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         goto out;
     }
+
     switch_buffer_zero(chunk_buffer);
 
     while(true) {
@@ -499,27 +501,35 @@ static void *SWITCH_THREAD_FUNC audio_processing_thread(switch_thread_t *thread,
 
             switch_mutex_lock(ivs_session->mutex);
             chunk_type_local = ivs_session->chunk_type;
-            if(file_ext_local == NULL) {
-                if(ivs_session->chunk_file_ext) { file_ext_local = switch_core_strdup(pool, ivs_session->chunk_file_ext); }
-            } else {
-                if(ivs_session->chunk_file_ext && ivs_session->fl_chunk_file_ext_changed) {
-                    file_ext_local = switch_core_strdup(pool, ivs_session->chunk_file_ext);
-                    ivs_session->fl_chunk_file_ext_changed = false;
-                }
-            }
+            chunk_encoding_local = ivs_session->chunk_encoding;
             switch_mutex_unlock(ivs_session->mutex);
 
             if(chunk_type_local == IVS_CHUNK_TYPE_FILE) {
-                char *out_fname = audio_file_write((switch_byte_t *)ptr, buf_len, ivs_session->samplerate, ivs_session->channels, file_ext_local);
-                if(out_fname == NULL) {
+                char *ofname = audio_file_write((switch_byte_t *)ptr, buf_len, ivs_session->samplerate, ivs_session->channels, ivs_chunkEncoding2name(chunk_encoding_local));
+                if(ofname == NULL) {
                     switch_buffer_zero(chunk_buffer);
                     fl_chunk_ready = false;
                     goto timer_next;
                 }
-                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, out_fname, strlen(out_fname));
-                switch_safe_free(out_fname);
+                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, ofname, strlen(ofname));
+                switch_safe_free(ofname);
             } else if(chunk_type_local == IVS_CHUNK_TYPE_BUFFER) {
-                ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, (switch_byte_t *)ptr, buf_len);
+                if(chunk_encoding_local == IVS_CHUNK_ENCODING_RAW) {
+                    ivs_event_push_chunk_ready(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, (switch_byte_t *)ptr, buf_len);
+                } else if(chunk_encoding_local == IVS_CHUNK_ENCODING_B64) {
+                    switch_byte_t *b64_buffer = NULL;
+                    uint32_t b64_buffer_len = BASE64_ENC_SZ(buf_len);
+
+                    switch_malloc(b64_buffer, b64_buffer_len);
+                    if(switch_b64_encode((uint8_t *)ptr, buf_len, b64_buffer, b64_buffer_len) == SWITCH_STATUS_SUCCESS) {
+                        ivs_event_push_chunk_ready_zerocopy(IVS_EVENTSQ(ivs_session), ivs_session->samplerate, ivs_session->channels, buf_time, buf_len, b64_buffer, b64_buffer_len);
+                    } else {
+                        switch_safe_free(b64_buffer);
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_b64_encode() fail\n");
+                    }
+                } else {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unsupported encoding type: %s\n", ivs_chunkEncoding2name(chunk_encoding_local));
+                }
             }
 
             switch_buffer_zero(chunk_buffer);

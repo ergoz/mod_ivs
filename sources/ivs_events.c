@@ -102,6 +102,20 @@ switch_status_t ivs_event_push_chunk_ready(switch_queue_t *queue, uint32_t sampl
     return ivs_event_push_dh(queue, JID_NONE, IVS_EVENT_CHUNK_READY, mchunk, sizeof(ivs_event_payload_mchunk_t), (mem_destroy_handler_t *)ivs_event_payload_free_mchunk);
 }
 
+switch_status_t ivs_event_push_chunk_ready_zerocopy(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len) {
+    ivs_event_payload_mchunk_t *mchunk = NULL;
+
+    switch_zmalloc(mchunk, sizeof(ivs_event_payload_mchunk_t));
+    mchunk->time = time;
+    mchunk->length = length;
+    mchunk->channels = channels;
+    mchunk->samplerate = samplerate;
+    mchunk->data_len = data_len;
+    mchunk->data = data;
+
+    return ivs_event_push_dh(queue, JID_NONE, IVS_EVENT_CHUNK_READY, mchunk, sizeof(ivs_event_payload_mchunk_t), (mem_destroy_handler_t *)ivs_event_payload_free_mchunk);
+}
+
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // nlp-finished
 void ivs_event_payload_nlp_free(ivs_event_payload_nlp_t *payload) {

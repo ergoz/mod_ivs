@@ -1,20 +1,8 @@
-# mod_ivs
-todo...
+if(typeof(ivs) == 'undefined') {
+    throw "Illegal runtime";
+}
 
-
-### dialplan
-```xml
-<extension name="ivs-demo">
-  <condition field="destination_number" expression="^(3111)$">
-    <action application="answer"/>
-    <action application="ivs" data="chatgpt.js"/>
-    <action application="hangup"/>
-  </condition>
-</extension>
-```
-
-### [more examples](sources/examples/)
-```js
+// ----------------------------------------------------------------------------------------------------------------------
 var chatGPT = new ChatGPT("---your-api-key---");
 chatGPT.connectTimeout = 3;  // sec
 chatGPT.requestTimeout = 10; // sec
@@ -25,6 +13,7 @@ ivs.ttsEngine = 'google';
 ivs.chunkType = 'file';
 ivs.chunkEncoding = 'mp3';
 
+
 consoleLog('notice', "ivs.language..............: " + ivs.language);
 consoleLog('notice', "ivs.ttsEngine.............: " + ivs.ttsEngine);
 consoleLog('notice', "ivs.chunkType.............: " + ivs.chunkType);
@@ -32,19 +21,23 @@ consoleLog('notice', "ivs.chunkEncoding.........: " + ivs.chunkEncoding);
 consoleLog('notice', "chatGPT.chatModel.........: " + chatGPT.chatModel);
 consoleLog('notice', "chatGPT.whisperModel......: " + chatGPT.whisperModel);
 
+
 var fl_play_hello = true;
 
 while(!script.isInterrupted()) {
     if(!session.isReady) { break; }
 
     if(fl_play_hello) {
-	ivs.say("Hello, how can I help you?");
+        ivs.say("Hello, how can I help you?");
         fl_play_hello = false;
     }
 
     var event = ivs.getEvent();
     if(event) {
+        consoleLog('notice', "IVS-EVENT: " + JSON.stringify(event));
+
         if(event.type == "chunk-ready") {
+            //ivs.playback(event.data.file, true, true);        
             chatGPT.aksWhisper(event.data.file, true, true);
         }
 
@@ -63,4 +56,3 @@ while(!script.isInterrupted()) {
 
     msleep(10);
 }
-```
